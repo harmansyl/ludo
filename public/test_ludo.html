@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ludo Backend Test Harness</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0b1020; --fg:#e8ecf1; --muted:#a9b3c1; --card:#121933; --accent:#5ea1ff; }
+    html,body{background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial; margin:0;}
+    .wrap{max-width:980px; margin:0 auto; padding:24px;}
+    h1{margin:0 0 8px}
+    .sub{color:var(--muted); margin:0 0 24px}
+    .grid{display:grid; gap:16px}
+    @media(min-width:850px){ .grid{grid-template-columns:1fr 1fr} }
+    .card{background:var(--card); border:1px solid #1e2750; border-radius:14px; padding:16px; box-shadow:0 4px 20px rgba(0,0,0,.25)}
+    .card h3{margin:0 0 10px}
+    label{display:block; font-size:12px; color:var(--muted); margin:8px 0 4px}
+    input{width:100%; box-sizing:border-box; padding:10px 12px; background:#0e1530; color:var(--fg); border:1px solid #2a376e; border-radius:10px; outline:none}
+    input::placeholder{color:#6f7aa2}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px}
+    button{background:var(--accent); color:#081126; border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer}
+    button.secondary{background:#2a376e; color:var(--fg)}
+    .log{white-space:pre-wrap; background:#0a122a; border:1px solid #1e2750; padding:12px; border-radius:10px; min-height:140px; overflow:auto}
+    .ok{color:#77ffa2} .err{color:#ff8e88}
+    .badge{display:inline-block; padding:4px 8px; font-size:12px; border:1px solid #2a376e; border-radius:999px; color:var(--muted)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎲 Ludo Backend Test</h1>
+  <p class="sub">Use this to drive your PHP APIs without the full UI. Make sure you load this via <code>http://localhost/...</code> under XAMPP.</p>
+
+  <div class="grid">
+    <!-- Auth -->
+    <div class="card">
+      <h3>Auth</h3>
+      <span id="authState" class="badge">Not logged in</span>
+      <label>Username</label><input id="user" placeholder="e.g. alice">
+      <label>Phone</label><input id="phone" placeholder="e.g. 9876543210">
+      <label>Password</label><input id="pass" type="password" placeholder="********">
+      <div class="row">
+        <button id="btnRegister">Register</button>
+        <button id="btnLogin">Login</button>
+        <button id="btnLogout" class="secondary">Logout</button>
+      </div>
+    </div>
+
+    <!-- Room -->
+    <div class="card">
+      <h3>Room</h3>
+      <label>Room Code</label><input id="room" placeholder="Paste code after creating or joining">
+      <div class="row">
+        <button id="btnCreateRoom">Create ONLINE Room</button>
+        <button id="btnJoinRoom" class="secondary">Join Room</button>
+      </div>
+      <div class="row">
+        <button id="btnGetState">Get State</button>
+      </div>
+      <p class="sub" style="margin-top:8px">Tip: check valid codes via DB: <code>SELECT id, code FROM rooms;</code></p>
+    </div>
+
+    <!-- Gameplay -->
+    <div class="card">
+      <h3>Gameplay</h3>
+      <div class="row">
+        <button id="btnRoll">Roll Dice</button>
+        <span id="lastDice" class="badge">dice: -</span>
+      </div>
+      <label>Piece Index (0–3)</label><input id="pieceIdx" type="number" min="0" max="3" placeholder="0">
+      <div class="row">
+        <button id="btnMove">Move Piece</button>
+      </div>
+      <div style="margin-top:8px">
+        <span id="turnUser" class="badge">turn: -</span>
+        <span id="winnerUser" class="badge">winner: -</span>
+      </div>
+    </div>
+
+    <!-- Admin -->
+    <div class="card">
+      <h3>Admin Tools</h3>
+      <label>Force Next Dice (1–6)</label><input id="forceDice" type="number" min="1" max="6" placeholder="6">
+      <div class="row">
+        <button id="btnForceDice">Set Next Dice</button>
+        <button id="btnRefreshCsrf" class="secondary">Refresh CSRF</button>
+      </div>
+      <p class="sub">Works only if your logged-in user is admin.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Log</h3>
+    <div id="log" class="log"></div>
+  </div>
+</div>
+
+<script>
+  // ======= CONFIG (paths assume this file is in /public and APIs in /api) =======
+  const API = {
+    token:        '../api/get_token.php',
+    register:     '../api/register.php',
+    login:        '../api/login.php',
+    logout:       '../api/logout.php',
+    createRoom:   '../api/create_room.php',
+    joinRoom:     '../api/join_room.php',
+    roll:         '../api/roll_dice.php',
+    move:         '../api/make_move.php',
+    state:        '../api/get_state.php',
+    forceDice:    '../api/set_next_dice.php'
+  };
+
+  let CSRF = '';
+
+  function log(msg, type){
+    const el = document.getElementById('log');
+    const line = document.createElement('div');
+    line.className = type === 'err' ? 'err' : 'ok';
+    line.textContent = (typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2));
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setBadge(id, text){
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  async function fetchToken(){
+    try {
+      const r = await fetch(API.token, {credentials:'same-origin'});
+      const j = await r.json();
+      if (j.ok) {
+        CSRF = j.token;
+        log('CSRF ready', 'ok');
+      } else {
+        log(j, 'err');
+      }
+    } catch(e){ log(e.toString(), 'err'); }
+  }
+
+  async function jpost(url, body){
+    const r = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type':'application/json','X-CSRF-Token':CSRF},
+      body: JSON.stringify(body || {})
+    });
+    let data;
+    try { data = await r.json(); }
+    catch(e){ data = {ok:false,error:'Non-JSON response or PHP error. Check Apache/PHP logs.', status:r.status}; }
+    return data;
+  }
+
+  // ======= Wire buttons =======
+  document.getElementById('btnRegister').onclick = async ()=>{
+    const j = await jpost(API.register, {
+      username: document.getElementById('user').value.trim(),
+      phone:    document.getElementById('phone').value.trim(),
+      password: document.getElementById('pass').value
+    });
+    log(j, j.ok?'ok':'err');
+    if (j.ok) document.getElementById('authState').textContent = 'Registered + Logged in';
+  };
+
+  document.getElementById('btnLogin').onclick = async ()=>{
+    const j = await jpost(API.login, {
+      username: document.getElementById('user').value.trim(),
+      password: document.getElementById('pass').value
+    });
+    log(j, j.ok?'ok':'err');
+    if (j.ok) document.getElementById('authState').textContent = 'Logged in';
+  };
+
+  document.getElementById('btnLogout').onclick = async ()=>{
+    const j = await jpost(API.logout, {});
+    log(j, j.ok?'ok':'err');
+    if (j.ok) document.getElementById('authState').textContent = 'Logged out';
+  };
+
+  document.getElementById('btnCreateRoom').onclick = async ()=>{
+    const j = await jpost(API.createRoom, {mode:'ONLINE'});
+    log(j, j.ok?'ok':'err');
+    if (j.ok) document.getElementById('room').value = j.code || '';
+  };
+
+  document.getElementById('btnJoinRoom').onclick = async ()=>{
+    const j = await jpost(API.joinRoom, {code: document.getElementById('room').value.trim()});
+    log(j, j.ok?'ok':'err');
+  };
+
+  document.getElementById('btnGetState').onclick = async ()=>{
+    const j = await jpost(API.state, {room: document.getElementById('room').value.trim()});
+    log(j, j.ok?'ok':'err');
+    if (j.ok){
+      setBadge('turnUser', 'turn: ' + j.turnUser);
+      setBadge('lastDice', 'dice: ' + (j.lastDice ?? '-'));
+      setBadge('winnerUser', 'winner: ' + (j.winnerUser ?? '-'));
+    }
+  };
+
+  document.getElementById('btnRoll').onclick = async ()=>{
+    const j = await jpost(API.roll, {room: document.getElementById('room').value.trim()});
+    log(j, j.ok?'ok':'err');
+    if (j.ok) setBadge('lastDice', 'dice: ' + j.dice);
+  };
+
+  document.getElementById('btnMove').onclick = async ()=>{
+    const j = await jpost(API.move, {
+      room: document.getElementById('room').value.trim(),
+      tokenIndex: parseInt(document.getElementById('pieceIdx').value || '0',10)
+    });
+    log(j, j.ok?'ok':'err');
+    if (j.ok){
+      // Refresh state after a move to update turn/winner badges
+      document.getElementById('btnGetState').click();
+    }
+  };
+
+  document.getElementById('btnForceDice').onclick = async ()=>{
+    const j = await jpost(API.forceDice, {
+      room: document.getElementById('room').value.trim(),
+      dice: parseInt(document.getElementById('forceDice').value || '6', 10)
+    });
+    log(j, j.ok?'ok':'err');
+  };
+
+  document.getElementById('btnRefreshCsrf').onclick = async ()=>{
+    await fetchToken();
+  };
+
+  // ======= Init =======
+  (async function init(){
+    await fetchToken();
+  })();
+</script>
+</body>
+</html>

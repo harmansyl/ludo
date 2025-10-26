@@ -1,0 +1,103 @@
+body { 
+  font-family: system-ui, Arial, sans-serif; 
+  margin:0; 
+  background:#0c0f14; 
+  color:#e6e9ef; 
+}
+
+header, .card { 
+  background:#141922; 
+  border:1px solid #232a36; 
+  border-radius:10px; 
+  padding:16px; 
+  margin:16px auto; 
+  max-width:960px; 
+}
+
+button, input, select { 
+  padding:8px 12px; 
+  border-radius:6px; 
+  border:1px solid #2a3342; 
+  background:#1b2130; 
+  color:#e6e9ef; 
+}
+
+.row { 
+  display:flex; 
+  gap:12px; 
+  flex-wrap:wrap; 
+}
+
+.hidden { 
+  display:none !important; 
+}
+
+.badge { 
+  padding:2px 8px; 
+  border:1px solid #2a3342; 
+  border-radius:999px; 
+  font-size:12px; 
+}
+
+.board {
+  position: relative;
+  width: 420px;
+  height: 420px;
+  margin: 20px auto;
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  grid-template-rows: repeat(15, 1fr);
+  border: 2px solid #2a3342;
+  border-radius: 12px;
+  background: #0f131c;
+  box-shadow: 0 0 25px rgba(180, 120, 255, 0.3);
+}
+
+/* Bases */
+.base {
+  grid-column: span 6;
+  grid-row: span 6;
+  border: 2px solid #2a3342;
+  border-radius: 10px;
+  margin: 2px;
+  position: relative;
+}
+.red-base { background: radial-gradient(circle, #ff4b4b, #6b1a1a); grid-column: 1/7; grid-row: 1/7; }
+.green-base { background: radial-gradient(circle, #4bff5c, #1a6b27); grid-column: 10/16; grid-row: 1/7; }
+.yellow-base { background: radial-gradient(circle, #ffe74b, #6b631a); grid-column: 10/16; grid-row: 10/16; }
+.blue-base { background: radial-gradient(circle, #4bb6ff, #1a3b6b); grid-column: 1/7; grid-row: 10/16; }
+
+/* Center safe zone */
+.center {
+  grid-column: 7/10;
+  grid-row: 7/10;
+  background: linear-gradient(135deg, #b38bff, #2b2f3a);
+  border-radius: 8px;
+  border: 2px solid #805ad5;
+  box-shadow: 0 0 15px rgba(179,139,255,0.6);
+}
+
+
+.dice { 
+  font-size:32px; 
+}
+
+.admin-panel { 
+  border:1px dashed #b38bff; 
+  padding:10px; 
+  margin-top:10px; 
+}
+
+/* --- NEW PIECE STYLE --- */
+.piece {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: red;
+  color: white;
+  font-size: 12px;
+  text-align: center;
+  line-height: 20px;
+  pointer-events: none;
+}
